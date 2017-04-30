@@ -7,7 +7,7 @@ defmodule DockerApi.Container do
   Fetch all the containers from a given docker host
 
   host: "127.0.0.1"
-    
+
      iex> DockerApi.Container.all("127.0.0.1")
         [%{...}, ..]
   """
@@ -28,7 +28,7 @@ defmodule DockerApi.Container do
         [%{...}, ..]
   """
   def all(host, opts) when is_map(opts) do
-    response = HTTP.get(host <> "/containers/json", opts) 
+    response = HTTP.get(host <> "/containers/json", opts)
     handle_response(response)
   end
 
@@ -36,18 +36,18 @@ defmodule DockerApi.Container do
   Find a container when hosts is a List
 
   hosts: ["127.0.0.1", 10.10.100.31"]
-  id: "1234567" 
+  id: "1234567"
 
       iex> DockerApi.Container.find(["127.0.0.1", 10.10.100.31"], "123456")
         %{...}
   """
   def find(hosts, id) when is_list(hosts), do: _find(hosts, id, %{})
-  
+
   @doc """
   Find a container when hosts is a String
 
   hosts: "127.0.0.1"
-  id: "1234567" 
+  id: "1234567"
 
       iex> DockerApi.Container.find("127.0.0.1", "123456")
         %{...}
@@ -63,7 +63,7 @@ defmodule DockerApi.Container do
     case find(head, id) do
       {:ok, body, 200} when is_map(body) ->
         _find([], id, {:ok, body, 200})
-      {result, body, code} -> 
+      {result, body, code} ->
         _find(tail, id, {result, body, code})
     end
   end
@@ -84,11 +84,6 @@ defmodule DockerApi.Container do
 
   def start(host, id) do
     response = HTTP.post(host <> "/containers/#{id}/start")
-    handle_response(response)
-  end
-
-  def start(host, id, opts) do
-    response = HTTP.post(host <> "/containers/#{id}/start", opts)
     handle_response(response)
   end
 
@@ -134,12 +129,12 @@ defmodule DockerApi.Container do
     response = HTTP.post(host <> "/containers/#{id}/exec", opts)
     handle_response(response)
   end
-  
+
   def exec_start(host, id, opts) do
     {:ok, %HTTPoison.AsyncResponse{id: id}} = HTTPoison.post host <> "/exec/#{id}/start?stream=0", Poison.encode!(opts), %{"content-type" => "application/json"}, stream_to: self
     {:ok, stream_loop([]) |> Enum.reverse }
   end
-  
+
   @doc """
 
   Fetch the logs from a container
@@ -158,20 +153,17 @@ defmodule DockerApi.Container do
     receive do
       %HTTPoison.AsyncStatus{ id: id, code: 200 } -> stream_loop(acc)
       %HTTPoison.AsyncHeaders{headers: _, id: id} -> stream_loop(acc)
-      %HTTPoison.AsyncChunk{id: id, chunk: chk} -> 
-      <<stream_type::8, 0, 0, 0,0,0,idk::8,rest::binary >> = chk
-      #  stream_loop([to_string(rest)|acc])
-      case String.printable?(rest) do
-            true -> 
-            stream_loop([rest|acc])
-            _    -> stream_loop(acc) #<<stream_type::8, 0, 0, 0, size1::8, size2::8, size3::8, size4::8, rest::binary >> = chk
-          end
+      %HTTPoison.AsyncChunk{id: id, chunk: chk} ->
+        case chk do
+          <<stream_type::8, 0, 0, 0, size::32,rest::binary >> -> stream_loop([rest|acc])
+          _ -> stream_loop(acc)
+        end
       %HTTPoison.AsyncEnd{id: id} ->
         stream_loop(acc, :done)
       %HTTPoison.Error{id: id, reason: {:closed, extra}} ->
         acc
     after
-      5_000 -> 
+      5_000 ->
         IO.puts "Timeout waiting for stream"
         acc
     end

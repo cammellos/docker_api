@@ -1,4 +1,4 @@
-FROM busybox
+FROM alpine
 
 MAINTAINER Bradley Smith
 
